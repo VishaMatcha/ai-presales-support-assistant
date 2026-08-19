@@ -1,0 +1,76 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    restart: unless-stopped
+    ports: ["6333:6333"]
+    volumes: ["qdrant-data:/qdrant/storage"]
+
+  ollama:
+    image: ollama/ollama:0.11.4
+    restart: unless-stopped
+    ports: ["11434:11434"]
+    volumes: ["ollama-data:/root/.ollama"]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ollama-pull:
+    image: ollama/ollama:0.11.4
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull llama3.1:8b && ollama pull nomic-embed-text"]
+    environment: ["OLLAMA_HOST=http://ollama:11434"]
+    volumes: ["ollama-data:/root/.ollama"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: ingestion/Dockerfile
+    environment:
+      DATASET_LIMIT: ${DATASET_LIMIT:-2000}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: bitext_support
+    depends_on:
+      qdrant:
+        condition: service_started
+      ollama-pull:
+        condition: service_completed_successfully
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      FRONTEND_ORIGIN: http://localhost:3000,http://localhost:5173
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_CHAT_MODEL: llama3.1:8b
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: bitext_support
+      RAG_SCORE_THRESHOLD: 0.58
+    ports: ["4000:4000"]
+    depends_on:
+      ingestion:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BACKEND_URL: http://localhost:4000
+    restart: unless-stopped
+    ports: ["3000:80"]
+    depends_on: [backend]
+
+volumes:
+  qdrant-data:
+  ollama-data:

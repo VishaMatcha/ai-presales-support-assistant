@@ -1,0 +1,17 @@
+{
+  "name": "local-support-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first pre-sales intake and support RAG assistant demo.",
+  "workspaces": ["backend", "frontend", "ingestion"],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w backend && npm run build -w frontend && npm run build -w ingestion",
+    "lint": "npm run lint -w backend && npm run lint -w frontend && npm run lint -w ingestion",
+    "test": "npm run test -w backend",
+    "ingest": "npm run ingest -w ingestion",
+    "check": "npm run lint && npm run test && npm run build"
+  },
+  "engines": { "node": ">=20.19" },
+  "devDependencies": { "concurrently": "^9.2.1" }
+}
